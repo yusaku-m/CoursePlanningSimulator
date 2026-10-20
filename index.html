@@ -84,9 +84,21 @@ tr.conflict td.name::after { content: "（他学年で選択済）"; color: var(
 .muted { color: var(--muted); font-size: 12px; }
 .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .row input[type=text] { flex: 1; min-width: 8em; font-family: ui-monospace, Consolas, monospace; }
-#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: var(--bg);
+#toast { position: fixed; left: 50%; bottom: calc(24px + var(--bar-h, 0px)); transform: translateX(-50%); background: var(--text); color: var(--bg);
   padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 #toast.show { opacity: 1; }
+/* スマホ：不足要件と週あたり授業時数を画面下に常時表示 */
+#mobileBar { display: none; }
+@media (max-width: 960px) {
+  #mobileBar { display: flex; flex-direction: column; gap: 4px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -2px 8px rgba(0, 0, 0, .12);
+    padding: 6px 16px calc(6px + env(safe-area-inset-bottom)); font-size: 12px; }
+  body { padding-bottom: var(--bar-h, 0px); }
+}
+#mbFails { display: flex; flex-wrap: wrap; gap: 4px; }
+#mbFails .pill { font-weight: 500; }
+#mbHours { width: 100%; }
+#mbHours th, #mbHours td { padding: 1px 4px; border: 0; }
 footer { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; color: var(--muted); font-size: 12px; }
 </style>
 </head>
@@ -134,6 +146,10 @@ footer { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
   特別講義など、年度によって開講されない科目があります。実際の開講は各年度のシラバス・時間割で確認してください。
   要件：学業成績の評価・評定並びに進級及び卒業の認定に関する規程（学生便覧2026）ほか。正式な判定は必ず学校の資料で確認してください。
 </footer>
+<div id="mobileBar">
+  <div id="mbFails"></div>
+  <table id="mbHours"></table>
+</div>
 <div id="toast"></div>
 
 <script src="data.js"></script>
@@ -399,27 +415,39 @@ function update() {
 
   const p4 = per[3], p5 = per[4], R = RULES;
   let html = '';
+  const fails = [];  // スマホ下部バー用の不足要件
+  // parts: [修得, 必要, 名称] の並び
+  const check = (label, short, parts) => {
+    const lacks = parts.filter(([have, min]) => have < min).map(([have, min, n]) => `${n}あと${min - have}`);
+    if (lacks.length) fails.push(`${short} ${lacks.join('・')}`);
+    html += status(label, !lacks.length, parts.map(([have, min, n]) => `${n} ${need(have, min)}`).join('・'));
+  };
   for (const g of [1, 2, 3, 4]) {
-    const min = R.promote[g];
-    html += status(`${g}年 → ${g + 1}年 進級`, per[g - 1].cumTotal >= min, `累計 ${need(per[g - 1].cumTotal, min)}`);
+    check(`${g}年 → ${g + 1}年 進級`, `${g}→${g + 1}年進級`, [[per[g - 1].cumTotal, R.promote[g], '累計']]);
   }
-  html += status('卒業見込みライン（4年終了時）',
-    p4.cumGeneral >= R.recommend.general && p4.cumMajor >= R.recommend.major && p4.cumTotal >= R.recommend.total,
-    `一般 ${need(p4.cumGeneral, R.recommend.general)}・専門 ${need(p4.cumMajor, R.recommend.major)}・計 ${need(p4.cumTotal, R.recommend.total)}`);
-  html += status('卒業（5年終了時）',
-    p5.cumGeneral >= R.graduate.general && p5.cumMajor >= R.graduate.major && p5.cumTotal >= R.graduate.total,
-    `一般 ${need(p5.cumGeneral, R.graduate.general)}・専門 ${need(p5.cumMajor, R.graduate.major)}・計 ${need(p5.cumTotal, R.graduate.total)}`);
-  html += status('安全を持った卒業ライン（5年終了時）', p5.cumTotal >= R.request.total, `累計 ${need(p5.cumTotal, R.request.total)}`);
+  check('卒業見込みライン（4年終了時）', '卒業見込み', [
+    [p4.cumGeneral, R.recommend.general, '一般'], [p4.cumMajor, R.recommend.major, '専門'], [p4.cumTotal, R.recommend.total, '計']]);
+  check('卒業（5年終了時）', '卒業', [
+    [p5.cumGeneral, R.graduate.general, '一般'], [p5.cumMajor, R.graduate.major, '専門'], [p5.cumTotal, R.graduate.total, '計']]);
+  check('安全を持った卒業ライン（5年終了時）', '安全ライン', [[p5.cumTotal, R.request.total, '累計']]);
   $('checks').innerHTML = html;
+  $('mbFails').innerHTML = fails.length
+    ? fails.map(f => `<span class="pill ng">${f}</span>`).join('')
+    : '<span class="pill ok">要件はすべて満たしています</span>';
 
-  let rows = '', notes = [];
+  let rows = '', notes = [], mbFront = '', mbBack = '';
   for (const g of [1, 2, 3, 4, 5]) {
     const { q, intensive } = weeklyHours(g);
     const half = (a, b) => a === b ? fmt(a) : `${fmt(a)} / ${fmt(b)}`;
     rows += `<tr><td>${g}年</td><td class="num">${half(q[0], q[1])}</td><td class="num">${half(q[2], q[3])}</td></tr>`;
+    mbFront += `<td class="num">${half(q[0], q[1]).replace(/ /g, '')}</td>`;
+    mbBack += `<td class="num">${half(q[2], q[3]).replace(/ /g, '')}</td>`;
     if (intensive.length) notes.push(`${g}年の集中講義：${intensive.join('、')}`);
   }
   $('hours').innerHTML = `<thead><tr><th></th><th class="num">前期</th><th class="num">後期</th></tr></thead><tbody>${rows}</tbody>`;
+  $('mbHours').innerHTML = `<thead><tr><th>週時数</th>${[1, 2, 3, 4, 5].map(g => `<th class="num">${g}年</th>`).join('')}</tr></thead>
+    <tbody><tr><th>前期</th>${mbFront}</tr><tr><th>後期</th>${mbBack}</tr></tbody>`;
+  fitBar();
   $('hoursNote').innerHTML = ['単位時間/週。「a / b」は1Q・2Q（3Q・4Q）で異なる場合。', ...notes].join('<br>');
 
   const code = encode();
@@ -427,6 +455,12 @@ function update() {
   history.replaceState(null, '', '#' + code);
   try { localStorage.setItem(STORAGE_KEY, code); } catch {}
 }
+
+// 下部バーの高さぶん、ページ末尾とトーストを持ち上げる
+function fitBar() {
+  document.documentElement.style.setProperty('--bar-h', $('mobileBar').offsetHeight + 'px');
+}
+window.addEventListener('resize', fitBar);
 
 function render() {
   $('cohort').value = cohort;
