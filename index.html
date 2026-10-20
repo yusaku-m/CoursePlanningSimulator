@@ -130,6 +130,7 @@ footer { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
 </main>
 <footer>
   科目データ：<a href="https://syllabus.kosen-k.go.jp/Pages/PublicDepartments?school_id=39" target="_blank" rel="noopener">高専Webシラバス</a>（g年の科目は「入学年度+g−1」年度の開講科目一覧、未公開の年度は最新年度）。
+  4・5年の選択科目は別表1・2（R5.12.5改正）の学年割当に従って表示しています。
   要件：学業成績の評価・評定並びに進級及び卒業の認定に関する規程（学生便覧2026）ほか。正式な判定は必ず学校の資料で確認してください。
 </footer>
 <div id="toast"></div>
@@ -148,6 +149,20 @@ const RULES = {
   request: { total: 171 },
 };
 
+// 4・5年の選択科目の学年割当（別表1・2 R5.12.5改正の変更箇所）。
+// シラバス上で4年・5年の両方に載っている科目は、ここで指定した学年だけに表示する。
+// 校外実習・特別講義・海外英語演習はどちらの学年でも履修できるので載せない。
+const GRADE_ASSIGN = {
+  4: ['文学特論Ⅰ', '人文科学Ⅰ', '人文科学Ⅱ', '人文科学Ⅲ', '化学概論Ⅰ', '化学概論Ⅱ',
+      '語学特講Ⅰ', '語学特講Ⅱ', '語学特講Ⅲ', '語学特講Ⅳ',
+      '応用数学Ⅲ', '工業力学Ⅱ', '電子工学', 'コンピュータ工学', '機構学', 'ＣＡＤⅡ'],
+  5: ['社会科学Ⅰ', '社会科学Ⅱ', '社会科学Ⅲ', '伝熱工学', '科学技術英語'],
+};
+const assignedGrade = name => {
+  const base = name.replace(/（.*?）$/, '');
+  return [4, 5].find(g => GRADE_ASSIGN[g].includes(base));
+};
+
 const STORAGE_KEY = 'cps.state.v1';
 const DUP_KEY = 'cps.allowDup';
 const HIDE_REQ_KEY = 'cps.hideReq';
@@ -156,22 +171,30 @@ const $ = id => document.getElementById(id);
 
 let cohort = 2024;   // 初期値の入学年度
 let subjects = [];   // {g, year, cat, req, name, study, cr, h, term, code}
-let electives = [];  // subjects の選択科目（セーブコードのビット順）
+let electives = [];  // subjects の選択科目
+let bitOrder = [];   // セーブコードのビット順（学年割当で隠した科目も含む）
 let selected = new Set();
 let allowDup = false;
 
 function loadCohort(e) {
   cohort = e;
-  subjects = DATA[e].map(([g, year, cat, req, name, study, cr, h, term, code]) =>
+  const all = DATA[e].map(([g, year, cat, req, name, study, cr, h, term, code]) =>
     ({ g, year, cat, req: req === 1, name, study: study === 1, cr, h, term, code }));
+  // 割当学年にも同じ科目があるときだけ、割当外の学年の行を隠す
+  const hidden = s => {
+    const a = assignedGrade(s.name);
+    return a && a !== s.g && all.some(o => o.g === a && o.name === s.name);
+  };
+  subjects = all.filter(s => !hidden(s));
   electives = subjects.filter(s => !s.req);
+  bitOrder = all.filter(s => !s.req).map(s => hidden(s) ? null : s);
   selected = new Set();
 }
 
 // ---- セーブコード：先頭1文字=入学年度、残り=選択科目ビット列のbase64url ----
 function encode() {
-  const bytes = new Uint8Array(Math.ceil(electives.length / 8));
-  electives.forEach((s, i) => { if (selected.has(s)) bytes[i >> 3] |= 1 << (i & 7); });
+  const bytes = new Uint8Array(Math.ceil(bitOrder.length / 8));
+  bitOrder.forEach((s, i) => { if (s && selected.has(s)) bytes[i >> 3] |= 1 << (i & 7); });
   let end = bytes.length;
   while (end > 0 && bytes[end - 1] === 0) end--;
   const b64 = btoa(String.fromCharCode(...bytes.slice(0, end)))
@@ -187,7 +210,8 @@ function decode(code) {
   let bin;
   try { bin = atob(code.slice(1).replace(/-/g, '+').replace(/_/g, '/')); } catch { return false; }
   loadCohort(e);
-  electives.forEach((s, i) => {
+  bitOrder.forEach((s, i) => {
+    if (!s) return;
     const b = bin.charCodeAt(i >> 3);
     if (b && (b >> (i & 7)) & 1) selected.add(s);
   });
