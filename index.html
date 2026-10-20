@@ -51,6 +51,9 @@ aside { position: sticky; top: 12px; display: flex; flex-direction: column; gap:
 table { border-collapse: collapse; width: 100%; }
 th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
 th { font-size: 12px; color: var(--muted); font-weight: 600; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--accent); }
+th .arrow { color: var(--accent); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 td.name { white-space: normal; min-width: 10em; }
 tr.req td { background: var(--req-row); }
@@ -243,7 +246,8 @@ function renderGrades() {
         </span>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th></th><th>授業科目</th><th>区分</th><th>必/選</th><th class="num">単位</th><th>開講</th><th>週時数 前期・後期</th></tr></thead>
+        <thead><tr>${SORT_COLUMNS.map(([key, label, cls]) =>
+          `<th class="sortable ${cls || ''}" data-sort="${key}">${label}<span class="arrow"></span></th>`).join('')}</tr></thead>
         <tbody></tbody>
       </table></div>`;
     const tbody = card.querySelector('tbody');
@@ -259,6 +263,7 @@ function renderGrades() {
         <td class="num">${s.cr}${s.study ? ' <span class="b-study">学修</span>' : ''}</td>
         <td><span class="badge b-term">${s.term}</span></td>
         <td class="hours">${s.term === '集中' ? '集中講義' : hoursText(s.h)}</td>`;
+      s.tr = tr;
       if (!s.req) {
         s.row = tr;
         s.box = tr.querySelector('input');
@@ -273,6 +278,46 @@ function renderGrades() {
   }
   root.querySelectorAll('[data-all]').forEach(b => b.onclick = () => bulk(+b.dataset.all, true));
   root.querySelectorAll('[data-none]').forEach(b => b.onclick = () => bulk(+b.dataset.none, false));
+  root.querySelectorAll('[data-sort]').forEach(th => th.onclick = () => {
+    if (sortKey === th.dataset.sort) sortDir = -sortDir;
+    else { sortKey = th.dataset.sort; sortDir = 1; }
+    applySort();
+  });
+  applySort();
+}
+
+// ---- 並べ替え：列見出しをクリックするたびに昇順・降順を切り替え（全学年共通） ----
+const TERM_ORDER = ['前期', '後期', '通年', '集中'];
+const SORT_COLUMNS = [
+  ['taken', '✓', '', s => isTaken(s) ? 0 : 1],
+  ['name', '授業科目', '', s => s.name],
+  ['cat', '区分', '', s => s.cat],
+  ['req', '必/選', '', s => s.req ? 0 : 1],
+  ['cr', '単位', 'num', s => s.cr],
+  ['term', '開講', '', s => TERM_ORDER.indexOf(s.term)],
+  ['hours', '週時数 前期・後期', '', s => s.h.reduce((a, b) => a + b, 0)],
+];
+let sortKey = null, sortDir = 1;
+
+function applySort() {
+  const col = SORT_COLUMNS.find(c => c[0] === sortKey);
+  for (let g = 1; g <= 5; g++) {
+    const list = subjects.filter(s => s.g === g);
+    if (col) {
+      const order = new Map(list.map((s, i) => [s, i]));
+      const val = col[3];
+      list.sort((a, b) => {
+        const x = val(a), y = val(b);
+        const c = typeof x === 'string' ? x.localeCompare(y, 'ja') : x - y;
+        return c * sortDir || order.get(a) - order.get(b);
+      });
+    }
+    const tbody = list[0] && list[0].tr.parentNode;
+    list.forEach(s => tbody.appendChild(s.tr));
+  }
+  document.querySelectorAll('[data-sort]').forEach(th => {
+    th.querySelector('.arrow').textContent = th.dataset.sort === sortKey ? (sortDir > 0 ? ' ▲' : ' ▼') : '';
+  });
 }
 
 // 同名の選択科目（4・5年合同開講など）は既定で1回だけ履修可能とする
