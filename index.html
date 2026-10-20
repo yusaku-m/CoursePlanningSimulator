@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>履修シミュレータ（機械工学科）</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #667085; --line: #e3e6eb;
+  --accent: #2f6fdb; --accent-soft: #e8f0fd;
+  --ok: #1f8a4c; --ok-soft: #e4f5ea; --ng: #c2392b; --ng-soft: #fbe9e7;
+  --gen: #8a5a00; --gen-soft: #fdf1dc; --pro: #22639b; --pro-soft: #e3effa;
+  --req-row: #f3f4f6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171c; --panel: #1c2028; --text: #e6e8ec; --muted: #9aa3b2; --line: #2d333d;
+    --accent: #6ea1f5; --accent-soft: #1f2d45;
+    --ok: #5fcf8d; --ok-soft: #173325; --ng: #f07b6e; --ng-soft: #3a1d1a;
+    --gen: #e7b45a; --gen-soft: #3a2d14; --pro: #7fb6e8; --pro-soft: #172c40;
+    --req-row: #20252e;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+  font-size: 14px; line-height: 1.5; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+header { background: var(--panel); border-bottom: 1px solid var(--line); padding: 12px 16px; }
+header .inner { max-width: 1280px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+h1 { font-size: 18px; margin: 0; margin-right: auto; }
+select, button, input[type=text] { font: inherit; color: var(--text); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; }
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+main { max-width: 1280px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+@media (max-width: 960px) { main { grid-template-columns: minmax(0, 1fr); } aside { order: -1; } }
+aside { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 12px; }
+@media (max-width: 960px) { aside { position: static; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.card h2 { font-size: 15px; margin: 0 0 8px; }
+.grade { margin-bottom: 16px; padding: 0; overflow: hidden; }
+.grade-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.grade-head h2 { margin: 0; font-size: 16px; }
+.grade-head .sum { color: var(--muted); font-size: 13px; }
+.grade-head .tools { margin-left: auto; display: flex; gap: 6px; }
+.grade-head .tools button { font-size: 12px; padding: 2px 8px; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.name { white-space: normal; min-width: 10em; }
+tr.req td { background: var(--req-row); }
+tr.sel { cursor: pointer; }
+tr.sel:hover td { background: var(--accent-soft); }
+tr.sel.on td { background: var(--accent-soft); }
+tr.sel.on td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+tr.conflict td.name::after { content: "（他学年で選択済）"; color: var(--muted); font-size: 12px; }
+.badge { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; line-height: 18px; }
+.b-gen { background: var(--gen-soft); color: var(--gen); }
+.b-pro { background: var(--pro-soft); color: var(--pro); }
+.b-req { background: var(--line); color: var(--text); }
+.b-sel { background: var(--accent-soft); color: var(--accent); }
+.b-term { border: 1px solid var(--line); color: var(--muted); }
+.b-study { color: var(--muted); font-size: 11px; }
+.hours { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.check { width: 16px; height: 16px; accent-color: var(--accent); }
+.summary th, .summary td { padding: 4px 6px; }
+.status { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.status:last-child { border-bottom: 0; }
+.status .label { font-size: 13px; }
+.status .detail { font-size: 12px; color: var(--muted); }
+.pill { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.ng { background: var(--ng-soft); color: var(--ng); }
+.short { color: var(--ng); }
+.muted { color: var(--muted); font-size: 12px; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.row input[type=text] { flex: 1; min-width: 8em; font-family: ui-monospace, Consolas, monospace; }
+#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: var(--bg);
+  padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+#toast.show { opacity: 1; }
+footer { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="inner">
+    <h1>履修シミュレータ <span class="muted">香川高専 機械工学科（2019年度以降入学者）</span></h1>
+    <label>入学年度 <select id="cohort"></select></label>
+    <button class="primary" id="copyLink">リンクをコピー</button>
+  </div>
+</header>
+
+<main>
+  <div id="grades"></div>
+  <aside>
+    <div class="card">
+      <h2>修得単位（必修はすべて合格と仮定）</h2>
+      <table class="summary" id="summary"></table>
+    </div>
+    <div class="card">
+      <h2>要件チェック</h2>
+      <div id="checks"></div>
+    </div>
+    <div class="card">
+      <h2>週あたり授業時数（4・5年）</h2>
+      <table class="summary" id="hours"></table>
+      <div class="muted" id="hoursNote"></div>
+    </div>
+    <div class="card">
+      <h2>セーブコード</h2>
+      <div class="row">
+        <input type="text" id="code" spellcheck="false" aria-label="セーブコード">
+        <button id="copyCode">コピー</button>
+        <button id="loadCode">読込</button>
+      </div>
+      <p class="muted">状態はこの端末のブラウザにも自動保存されます。</p>
+      <label class="muted"><input type="checkbox" id="allowDup"> 同名の選択科目を複数学年で履修できるようにする</label>
+    </div>
+  </aside>
+</main>
+<footer>
+  科目データ：<a href="https://syllabus.kosen-k.go.jp/Pages/PublicDepartments?school_id=39" target="_blank" rel="noopener">高専Webシラバス</a>（g年の科目は「入学年度+g−1」年度の開講科目一覧、未公開の年度は最新年度）。
+  要件：学業成績の評価・評定並びに進級及び卒業の認定に関する規程（学生便覧2026）ほか。正式な判定は必ず学校の資料で確認してください。
+</footer>
+<div id="toast"></div>
+
+<script src="data.js"></script>
+<script>
+// 要件（数値はここで変更できます）
+const RULES = {
+  // 進級：各学年終了時の累計修得単位数（第14条 表）
+  promote: { 1: 24, 2: 52, 3: 88, 4: 128 },
+  // 卒業：5年終了時
+  graduate: { general: 75, major: 82, total: 167 },
+  // 学科推薦基準：5年開始時（4年終了時）の累計
+  recommend: { general: 69, major: 58, total: 134 },
+  // 学科からの修得要望：累計
+  request: { total: 171 },
+};
+
+const STORAGE_KEY = 'cps.state.v1';
+const DUP_KEY = 'cps.allowDup';
+const COHORTS = Object.keys(DATA).map(Number).sort();
+const $ = id => document.getElementById(id);
+
+let cohort = COHORTS[0];
+let subjects = [];   // {g, year, cat, req, name, study, cr, h, term, code}
+let electives = [];  // subjects の選択科目（セーブコードのビット順）
+let selected = new Set();
+let allowDup = false;
+
+function loadCohort(e) {
+  cohort = e;
+  subjects = DATA[e].map(([g, year, cat, req, name, study, cr, h, term, code]) =>
+    ({ g, year, cat, req: req === 1, name, study: study === 1, cr, h, term, code }));
+  electives = subjects.filter(s => !s.req);
+  selected = new Set();
+}
+
+// ---- セーブコード：先頭1文字=入学年度、残り=選択科目ビット列のbase64url ----
+function encode() {
+  const bytes = new Uint8Array(Math.ceil(electives.length / 8));
+  electives.forEach((s, i) => { if (selected.has(s)) bytes[i >> 3] |= 1 << (i & 7); });
+  let end = bytes.length;
+  while (end > 0 && bytes[end - 1] === 0) end--;
+  const b64 = btoa(String.fromCharCode(...bytes.slice(0, end)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return (cohort - COHORTS[0]).toString(36) + b64;
+}
+
+function decode(code) {
+  code = (code || '').trim().replace(/^#/, '');
+  if (!/^[0-9a-z][A-Za-z0-9_-]*$/.test(code)) return false;
+  const e = COHORTS[0] + parseInt(code[0], 36);
+  if (!DATA[e]) return false;
+  let bin;
+  try { bin = atob(code.slice(1).replace(/-/g, '+').replace(/_/g, '/')); } catch { return false; }
+  loadCohort(e);
+  electives.forEach((s, i) => {
+    const b = bin.charCodeAt(i >> 3);
+    if (b && (b >> (i & 7)) & 1) selected.add(s);
+  });
+  return true;
+}
+
+// ---- 集計 ----
+const isTaken = s => s.req || selected.has(s);
+
+function totals() {
+  const per = [1, 2, 3, 4, 5].map(g => ({ g, general: 0, major: 0 }));
+  for (const s of subjects) if (isTaken(s)) per[s.g - 1][s.cat === 0 ? 'general' : 'major'] += s.cr;
+  let cg = 0, cm = 0;
+  for (const p of per) {
+    p.total = p.general + p.major;
+    cg += p.general; cm += p.major;
+    p.cumGeneral = cg; p.cumMajor = cm; p.cumTotal = cg + cm;
+  }
+  return per;
+}
+
+function weeklyHours(g) {
+  const q = [0, 0, 0, 0];
+  let intensive = [];
+  for (const s of subjects) {
+    if (s.g !== g || !isTaken(s)) continue;
+    s.h.forEach((v, i) => q[i] += v);
+    if (s.term === '集中') intensive.push(s.name);
+  }
+  return { q, intensive };
+}
+
+// ---- 描画 ----
+const fmt = n => Number.isInteger(n) ? String(n) : n.toFixed(1);
+
+function hoursText(h) {
+  const half = (a, b) => a === b ? (a ? fmt(a) : '–') : `${fmt(a)}/${fmt(b)}`;
+  return `${half(h[0], h[1])} ・ ${half(h[2], h[3])}`;
+}
+
+function renderGrades() {
+  const root = $('grades');
+  root.innerHTML = '';
+  for (let g = 1; g <= 5; g++) {
+    const list = subjects.filter(s => s.g === g);
+    const card = document.createElement('section');
+    card.className = 'card grade';
+    card.innerHTML = `
+      <div class="grade-head">
+        <h2>${g}年</h2>
+        <span class="sum" data-sum="${g}"></span>
+        <span class="muted">${list[0] ? list[0].year + '年度開講' : ''}</span>
+        <span class="tools">
+          <button data-all="${g}">選択を全部オン</button>
+          <button data-none="${g}">選択を全部オフ</button>
+        </span>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th></th><th>授業科目</th><th>区分</th><th>必/選</th><th class="num">単位</th><th>開講</th><th>週時数 前期・後期</th></tr></thead>
+        <tbody></tbody>
+      </table></div>`;
+    const tbody = card.querySelector('tbody');
+    for (const s of list) {
+      const tr = document.createElement('tr');
+      tr.className = s.req ? 'req' : 'sel';
+      const url = `https://syllabus.kosen-k.go.jp/Pages/PublicSyllabus?school_id=39&department_id=31&subject_code=${s.code}&year=${s.year}&lang=ja`;
+      tr.innerHTML = `
+        <td><input type="checkbox" class="check" ${s.req ? 'checked disabled' : ''} aria-label="${s.name}"></td>
+        <td class="name"><a href="${url}" target="_blank" rel="noopener">${s.name}</a></td>
+        <td><span class="badge ${s.cat === 0 ? 'b-gen' : 'b-pro'}">${s.cat === 0 ? '一般' : '専門'}</span></td>
+        <td><span class="badge ${s.req ? 'b-req' : 'b-sel'}">${s.req ? '必修' : '選択'}</span></td>
+        <td class="num">${s.cr}${s.study ? ' <span class="b-study">学修</span>' : ''}</td>
+        <td><span class="badge b-term">${s.term}</span></td>
+        <td class="hours">${s.term === '集中' ? '集中講義' : hoursText(s.h)}</td>`;
+      if (!s.req) {
+        s.row = tr;
+        s.box = tr.querySelector('input');
+        tr.addEventListener('click', ev => {
+          if (ev.target.closest('a')) return;
+          toggle(s, ev.target === s.box ? s.box.checked : !selected.has(s));
+        });
+      }
+      tbody.appendChild(tr);
+    }
+    root.appendChild(card);
+  }
+  root.querySelectorAll('[data-all]').forEach(b => b.onclick = () => bulk(+b.dataset.all, true));
+  root.querySelectorAll('[data-none]').forEach(b => b.onclick = () => bulk(+b.dataset.none, false));
+}
+
+// 同名の選択科目（4・5年合同開講など）は既定で1回だけ履修可能とする
+function sameName(s) {
+  return electives.filter(o => o !== s && o.name === s.name);
+}
+
+function toggle(s, on) {
+  if (on) {
+    selected.add(s);
+    if (!allowDup) sameName(s).forEach(o => selected.delete(o));
+  } else {
+    selected.delete(s);
+  }
+  update();
+}
+
+function bulk(g, on) {
+  for (const s of electives) {
+    if (s.g !== g) continue;
+    if (on && !allowDup && sameName(s).some(o => selected.has(o) && o.g !== g)) continue;
+    if (on) selected.add(s); else selected.delete(s);
+  }
+  update();
+}
+
+function status(label, ok, detail) {
+  return `<div class="status"><div><div class="label">${label}</div><div class="detail">${detail}</div></div>
+    <span class="pill ${ok ? 'ok' : 'ng'}">${ok ? '満たす' : '不足'}</span></div>`;
+}
+
+function need(have, min, unit = '') {
+  return have >= min ? `${have} / ${min}${unit}` : `${have} / ${min}${unit} <span class="short">（あと${min - have}）</span>`;
+}
+
+function update() {
+  for (const s of electives) {
+    const on = selected.has(s);
+    s.box.checked = on;
+    s.row.classList.toggle('on', on);
+    s.row.classList.toggle('conflict', !on && !allowDup && sameName(s).some(o => selected.has(o)));
+  }
+  const per = totals();
+  document.querySelectorAll('[data-sum]').forEach(el => {
+    const p = per[+el.dataset.sum - 1];
+    el.textContent = `${p.total}単位（一般${p.general}・専門${p.major}） 累計${p.cumTotal}`;
+  });
+
+  $('summary').innerHTML = `
+    <thead><tr><th>学年</th><th class="num">一般</th><th class="num">専門</th><th class="num">計</th><th class="num">累計一般</th><th class="num">累計専門</th><th class="num">累計</th></tr></thead>
+    <tbody>${per.map(p => `<tr><td>${p.g}年</td><td class="num">${p.general}</td><td class="num">${p.major}</td><td class="num">${p.total}</td>
+      <td class="num">${p.cumGeneral}</td><td class="num">${p.cumMajor}</td><td class="num"><b>${p.cumTotal}</b></td></tr>`).join('')}</tbody>`;
+
+  const p4 = per[3], p5 = per[4], R = RULES;
+  let html = '';
+  for (const g of [1, 2, 3, 4]) {
+    const min = R.promote[g];
+    html += status(`${g}年 → ${g + 1}年 進級`, per[g - 1].cumTotal >= min, `累計 ${need(per[g - 1].cumTotal, min)}`);
+  }
+  html += status('卒業（5年終了時）',
+    p5.cumGeneral >= R.graduate.general && p5.cumMajor >= R.graduate.major && p5.cumTotal >= R.graduate.total,
+    `一般 ${need(p5.cumGeneral, R.graduate.general)}・専門 ${need(p5.cumMajor, R.graduate.major)}・計 ${need(p5.cumTotal, R.graduate.total)}`);
+  html += status('学科推薦基準（5年開始時）',
+    p4.cumGeneral >= R.recommend.general && p4.cumMajor >= R.recommend.major && p4.cumTotal >= R.recommend.total,
+    `一般 ${need(p4.cumGeneral, R.recommend.general)}・専門 ${need(p4.cumMajor, R.recommend.major)}・計 ${need(p4.cumTotal, R.recommend.total)}`);
+  html += status('学科からの修得要望', p5.cumTotal >= R.request.total, `累計 ${need(p5.cumTotal, R.request.total)}`);
+  $('checks').innerHTML = html;
+
+  let rows = '', notes = [];
+  for (const g of [4, 5]) {
+    const { q, intensive } = weeklyHours(g);
+    const half = (a, b) => a === b ? fmt(a) : `${fmt(a)} / ${fmt(b)}`;
+    rows += `<tr><td>${g}年</td><td class="num">${half(q[0], q[1])}</td><td class="num">${half(q[2], q[3])}</td></tr>`;
+    if (intensive.length) notes.push(`${g}年の集中講義：${intensive.join('、')}`);
+  }
+  $('hours').innerHTML = `<thead><tr><th></th><th class="num">前期</th><th class="num">後期</th></tr></thead><tbody>${rows}</tbody>`;
+  $('hoursNote').innerHTML = ['単位時間/週。「a / b」は1Q・2Q（3Q・4Q）で異なる場合。', ...notes].join('<br>');
+
+  const code = encode();
+  $('code').value = code;
+  history.replaceState(null, '', '#' + code);
+  try { localStorage.setItem(STORAGE_KEY, code); } catch {}
+}
+
+function render() {
+  $('cohort').value = cohort;
+  renderGrades();
+  update();
+}
+
+// ---- 操作 ----
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+async function copy(text, msg) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  }
+  toast(msg);
+}
+
+$('cohort').innerHTML = COHORTS.map(e => `<option value="${e}">${e}年度入学</option>`).join('');
+$('cohort').onchange = () => { loadCohort(+$('cohort').value); render(); };
+$('copyLink').onclick = () => copy(location.href.split('#')[0] + '#' + encode(), 'リンクをコピーしました');
+$('copyCode').onclick = () => copy(encode(), 'セーブコードをコピーしました');
+$('loadCode').onclick = () => {
+  if (decode($('code').value)) { render(); toast('読み込みました'); } else toast('セーブコードが正しくありません');
+};
+$('allowDup').onchange = () => {
+  allowDup = $('allowDup').checked;
+  try { localStorage.setItem(DUP_KEY, allowDup ? '1' : '0'); } catch {}
+  update();
+};
+window.addEventListener('hashchange', () => {
+  if (location.hash.slice(1) !== encode() && decode(location.hash)) render();
+});
+
+try { allowDup = localStorage.getItem(DUP_KEY) === '1'; } catch {}
+$('allowDup').checked = allowDup;
+let saved = null;
+try { saved = localStorage.getItem(STORAGE_KEY); } catch {}
+if (!decode(location.hash) && !decode(saved)) loadCohort(cohort);
+render();
+</script>
+</body>
+</html>
