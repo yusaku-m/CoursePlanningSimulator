@@ -170,7 +170,8 @@ const HIDE_REQ_KEY = 'cps.hideReq';
 const COHORTS = Object.keys(DATA).map(Number).sort();
 const $ = id => document.getElementById(id);
 
-let cohort = 2024;   // 初期値の入学年度
+const DEFAULT_COHORT = 2024;  // 初期値の入学年度
+let cohort = DEFAULT_COHORT;
 let subjects = [];   // {g, year, cat, req, name, study, cr, h, term, code}
 let electives = [];  // subjects の選択科目
 let bitOrder = [];   // セーブコードのビット順（学年割当で隠した科目も含む）
@@ -483,7 +484,8 @@ try { $('hideReq').checked = localStorage.getItem(HIDE_REQ_KEY) === '1'; } catch
 document.body.classList.toggle('hide-req', $('hideReq').checked);
 let saved = null;
 try { saved = localStorage.getItem(STORAGE_KEY); } catch {}
-if (!decode(location.hash) && !decode(saved)) loadCohort(cohort);
+// 自動保存は選択科目があるときだけ復元する（何も選んでいなければ初期値の入学年度で始める）
+if (!decode(location.hash) && !(decode(saved) && selected.size)) loadCohort(DEFAULT_COHORT);
 render();
 </script>
 </body>
