@@ -54,6 +54,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 600; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 td.name { white-space: normal; min-width: 10em; }
 tr.req td { background: var(--req-row); }
+body.hide-req tr.req { display: none; }
 tr.sel { cursor: pointer; }
 tr.sel:hover td { background: var(--accent-soft); }
 tr.sel.on td { background: var(--accent-soft); }
@@ -91,6 +92,7 @@ footer { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
   <div class="inner">
     <h1>履修シミュレータ <span class="muted">香川高専 機械工学科（2019年度以降入学者）</span></h1>
     <label>入学年度 <select id="cohort"></select></label>
+    <label><input type="checkbox" id="hideReq"> 必修科目を隠す</label>
     <button class="primary" id="copyLink">リンクをコピー</button>
   </div>
 </header>
@@ -145,10 +147,11 @@ const RULES = {
 
 const STORAGE_KEY = 'cps.state.v1';
 const DUP_KEY = 'cps.allowDup';
+const HIDE_REQ_KEY = 'cps.hideReq';
 const COHORTS = Object.keys(DATA).map(Number).sort();
 const $ = id => document.getElementById(id);
 
-let cohort = COHORTS[0];
+let cohort = 2024;   // 初期値の入学年度
 let subjects = [];   // {g, year, cat, req, name, study, cr, h, term, code}
 let electives = [];  // subjects の選択科目（セーブコードのビット順）
 let selected = new Set();
@@ -399,8 +402,15 @@ window.addEventListener('hashchange', () => {
   if (location.hash.slice(1) !== encode() && decode(location.hash)) render();
 });
 
+$('hideReq').onchange = () => {
+  document.body.classList.toggle('hide-req', $('hideReq').checked);
+  try { localStorage.setItem(HIDE_REQ_KEY, $('hideReq').checked ? '1' : '0'); } catch {}
+};
+
 try { allowDup = localStorage.getItem(DUP_KEY) === '1'; } catch {}
 $('allowDup').checked = allowDup;
+try { $('hideReq').checked = localStorage.getItem(HIDE_REQ_KEY) === '1'; } catch {}
+document.body.classList.toggle('hide-req', $('hideReq').checked);
 let saved = null;
 try { saved = localStorage.getItem(STORAGE_KEY); } catch {}
 if (!decode(location.hash) && !decode(saved)) loadCohort(cohort);
