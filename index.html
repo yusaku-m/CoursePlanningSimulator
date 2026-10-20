@@ -62,6 +62,9 @@ body.hide-req tr.req { display: none; }
 #special { display: none; }
 body.show-special #special { display: block; }
 #special select { padding: 1px 4px; font-size: 12px; }
+/* 便覧の太枠（同じ枠では上位1つのみ認定）の区切り */
+#special thead th { border-bottom: 3px solid var(--muted); }
+#special tr.group-end td { border-bottom: 3px solid var(--muted); }
 tr.sel { cursor: pointer; }
 tr.sel:hover td { background: var(--accent-soft); }
 tr.sel.on td { background: var(--accent-soft); }
@@ -122,7 +125,7 @@ footer { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
       <div class="grade-head">
         <h2>特別学修（資格等による単位認定）</h2>
         <span class="sum" id="specialSum"></span>
-        <span class="muted">学生便覧 別表「特別学修 認定単位一覧表」。同じ枠内で上位を取ったときは上位の単位数のみ（第5条第3項）。認定される学年を選んでください。</span>
+        <span class="muted">学生便覧 別表「特別学修 認定単位一覧表」。太線で区切った枠の中で上位を取ったときは上位の単位数のみ（第5条第3項）。認定される学年を選んでください。</span>
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>✓</th><th>試験の種類</th><th>級</th><th>区分</th><th class="num">単位</th><th>認定学年</th></tr></thead>
@@ -396,7 +399,8 @@ function renderSpecial() {
   tbody.innerHTML = '';
   for (const it of SPECIAL) {
     const tr = document.createElement('tr');
-    tr.className = 'sel';
+    const next = SPECIAL[it.i + 1];
+    tr.className = 'sel' + (!next || next.group !== it.group ? ' group-end' : '');
     tr.innerHTML = `
       <td><input type="checkbox" class="check" aria-label="${it.exam} ${it.level}"></td>
       <td class="name">${it.exam}</td>
