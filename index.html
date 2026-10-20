@@ -59,6 +59,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 td.name { white-space: normal; min-width: 10em; }
 tr.req td { background: var(--req-row); }
 body.hide-req tr.req { display: none; }
+#special { display: none; }
+body.show-special #special { display: block; }
+#special select { padding: 1px 4px; font-size: 12px; }
 tr.sel { cursor: pointer; }
 tr.sel:hover td { background: var(--accent-soft); }
 tr.sel.on td { background: var(--accent-soft); }
@@ -107,16 +110,31 @@ footer { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
     <h1>履修シミュレータ <span class="muted">香川高専 機械工学科（2019年度以降入学者）</span></h1>
     <label>入学年度 <select id="cohort"></select></label>
     <label><input type="checkbox" id="hideReq"> 必修科目を隠す</label>
+    <label><input type="checkbox" id="showSpecial"> 特別学修（資格等）を表示</label>
     <button class="primary" id="copyLink">現状のリンクをコピー</button>
   </div>
 </header>
 
 <main>
-  <div id="grades"></div>
+  <div>
+    <div id="grades"></div>
+    <section class="card grade" id="special">
+      <div class="grade-head">
+        <h2>特別学修（資格等による単位認定）</h2>
+        <span class="sum" id="specialSum"></span>
+        <span class="muted">学生便覧 別表「特別学修 認定単位一覧表」。同じ枠内で上位を取ったときは上位の単位数のみ（第5条第3項）。認定される学年を選んでください。</span>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>✓</th><th>試験の種類</th><th>級</th><th>区分</th><th class="num">単位</th><th>認定学年</th></tr></thead>
+        <tbody id="specialBody"></tbody>
+      </table></div>
+    </section>
+  </div>
   <aside>
     <div class="card">
       <h2>修得単位（必修はすべて合格と仮定）</h2>
       <table class="summary" id="summary"></table>
+      <div class="muted" id="specialNote"></div>
     </div>
     <div class="card">
       <h2>要件チェック</h2>
@@ -137,6 +155,7 @@ footer { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
 <footer>
   科目データ：<a href="https://syllabus.kosen-k.go.jp/Pages/PublicDepartments?school_id=39" target="_blank" rel="noopener">高専Webシラバス</a>（g年の科目は「入学年度+g−1」年度の開講科目一覧、未公開の年度は最新年度）。
   4・5年の選択科目は別表1・2（R5.12.5改正）の学年割当に従って表示しています（語学特講はシラバスどおり）。
+  特別学修：香川高等専門学校以外の教育施設等における学習に関する規程 別表（学生便覧2026 p.66）。TOEICはListening&amp;Reading Test IPテスト（オンライン）を除きます。
   特別講義など、年度によって開講されない科目があります。実際の開講は各年度のシラバス・時間割で確認してください。
   要件：学業成績の評価・評定並びに進級及び卒業の認定に関する規程（学生便覧2026）ほか。正式な判定は必ず学校の資料で確認してください。
 </footer>
@@ -174,9 +193,48 @@ const assignedGrade = name => {
   return [4, 5].find(g => GRADE_ASSIGN[g].includes(base));
 };
 
+// 特別学修 認定単位一覧表（学生便覧 別表）：[試験の種類, 級, 区分(0一般/1専門), 認定単位, 枠]
+// 同じ枠（便覧の太枠。省略時は試験の種類ごと）では上位の1つだけを認定する
+const SPECIAL = [
+  ['TOEIC L&R', '730点以上', 0, 6], ['TOEIC L&R', '600〜729点', 0, 4], ['TOEIC L&R', '450〜599点', 0, 2], ['TOEIC L&R', '400〜449点', 0, 1],
+  ['実用英語技能検定', '1級', 0, 6], ['実用英語技能検定', '準1級', 0, 4], ['実用英語技能検定', '2級', 0, 2], ['実用英語技能検定', '準2級, 準2級プラス', 0, 1],
+  ['日本漢字能力検定', '1級, 準1級, 2級', 0, 2], ['日本漢字能力検定', '準2級', 0, 1],
+  ['日本語検定', '1級, 準1級, 2級', 0, 2], ['日本語検定', '準2級, 3級', 0, 1],
+  ['実用数学技能検定', '1級', 0, 4], ['実用数学技能検定', '準1級', 0, 2], ['実用数学技能検定', '2級', 0, 1],
+  ['統計検定', '1級', 0, 6], ['統計検定', '準1級', 0, 4], ['統計検定', '2級', 0, 2], ['統計検定', '3級', 0, 1],
+  ['技術英語能力検定', 'プロフェッショナル', 1, 6], ['技術英語能力検定', '準プロフェッショナル', 1, 4], ['技術英語能力検定', '1級', 1, 3], ['技術英語能力検定', '2級', 1, 2],
+  ['プロジェクトマネージャ試験', '—', 1, 6, '情報処理'], ['システムアーキテクト試験', '—', 1, 6, '情報処理'],
+  ['システム監査技術者試験', '—', 1, 6, '情報処理'], ['ネットワークスペシャリスト試験', '—', 1, 6, '情報処理'],
+  ['データベーススペシャリスト試験', '—', 1, 6, '情報処理'], ['ITサービスマネージャ試験', '—', 1, 6, '情報処理'],
+  ['エンベデッドシステムスペシャリスト試験', '—', 1, 6, '情報処理'], ['情報処理安全確保支援士試験', '—', 1, 6, '情報処理'],
+  ['ITストラテジスト試験', '—', 1, 6, '情報処理'], ['応用情報技術者試験', '—', 1, 4, '情報処理'],
+  ['基本情報技術者試験', '—', 1, 2, '情報処理'], ['情報セキュリティマネジメント試験', '—', 1, 1, '情報処理'],
+  ['ITパスポート試験', '—', 1, 1, '情報処理'],
+  ['CGエンジニア検定', 'エキスパート', 1, 2], ['CGエンジニア検定', 'ベーシック', 1, 1],
+  ['CGクリエイター検定', 'エキスパート', 1, 2], ['CGクリエイター検定', 'ベーシック', 1, 1],
+  ['画像処理エンジニア検定', 'エキスパート', 1, 2], ['画像処理エンジニア検定', 'ベーシック', 1, 1],
+  ['マルチメディア検定', 'エキスパート', 1, 2],
+  ['情報システム試験（プログラマ認定）', '—', 1, 2], ['情報システム試験（システムエンジニア認定）', '—', 1, 2],
+  ['ディジタル技術検定（制御部門・情報部門）', '1級', 1, 2], ['ディジタル技術検定（制御部門・情報部門）', '2級', 1, 1],
+  ['電気通信主任技術者試験', '線路', 1, 4], ['電気通信主任技術者試験', '伝送交換', 1, 4],
+  ['電気主任技術者試験', '第一種', 1, 6], ['電気主任技術者試験', '第二種', 1, 4], ['電気主任技術者試験', '第三種', 1, 2],
+  ['工事担任者試験', '総合通信', 1, 4], ['工事担任者試験', '第一級アナログ通信', 1, 2], ['工事担任者試験', '第一級デジタル通信', 1, 2],
+  ['工事担任者試験AI・DD', '第2種', 1, 1],
+  ['陸上特殊無線技士試験', '第1級', 1, 1],
+  ['陸上無線技術士試験', '第1級', 1, 4], ['陸上無線技術士試験', '第2級', 1, 2],
+  ['総合無線通信士試験', '第1級', 1, 4], ['総合無線通信士試験', '第2級', 1, 2], ['総合無線通信士試験', '第3級', 1, 1],
+  ['海上無線通信士試験', '第1級', 1, 4], ['海上無線通信士試験', '第2級', 1, 2], ['海上無線通信士試験', '第3級', 1, 1],
+  ['機械設計技術者試験', '3級', 1, 2],
+  ['測量士試験', '—', 1, 4, '測量'], ['測量士補試験', '—', 1, 2, '測量'],
+  ['技術士第一次試験', '—', 1, 4],
+  ['知的財産管理技能検定', '3級', 1, 2],
+].map(([exam, level, cat, cr, group], i) => ({ i, exam, level, cat, cr, group: group || exam }));
+
 const STORAGE_KEY = 'cps.state.v1';
 const DUP_KEY = 'cps.allowDup';
 const HIDE_REQ_KEY = 'cps.hideReq';
+const SHOW_SPECIAL_KEY = 'cps.showSpecial';
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const COHORTS = Object.keys(DATA).map(Number).sort();
 const $ = id => document.getElementById(id);
 
@@ -186,6 +244,7 @@ let subjects = [];   // {g, year, cat, req, name, study, cr, h, term, code}
 let electives = [];  // subjects の選択科目
 let bitOrder = [];   // セーブコードのビット順（学年割当で隠した科目も含む）
 let selected = new Set();
+let specialSel = new Map();  // 特別学修 → 認定学年
 let allowDup = false;
 
 function loadCohort(e) {
@@ -201,9 +260,11 @@ function loadCohort(e) {
   electives = subjects.filter(s => !s.req);
   bitOrder = all.filter(s => !s.req).map(s => hidden(s) ? null : s);
   selected = new Set();
+  specialSel = new Map();
 }
 
 // ---- セーブコード：先頭1文字=入学年度、残り=選択科目ビット列のbase64url ----
+// 特別学修があれば「.」に続けて、1件につき2文字（番号×5＋認定学年−1 の12ビット）を並べる
 function encode() {
   const bytes = new Uint8Array(Math.ceil(bitOrder.length / 8));
   bitOrder.forEach((s, i) => { if (s && selected.has(s)) bytes[i >> 3] |= 1 << (i & 7); });
@@ -211,22 +272,29 @@ function encode() {
   while (end > 0 && bytes[end - 1] === 0) end--;
   const b64 = btoa(String.fromCharCode(...bytes.slice(0, end)))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  return (cohort - COHORTS[0]).toString(36) + b64;
+  const sp = [...specialSel].map(([it, g]) => { const n = it.i * 5 + g - 1; return B64[n >> 6] + B64[n & 63]; }).join('');
+  return (cohort - COHORTS[0]).toString(36) + b64 + (sp ? '.' + sp : '');
 }
 
 function decode(code) {
   code = (code || '').trim().replace(/^#/, '');
-  if (!/^[0-9a-z][A-Za-z0-9_-]*$/.test(code)) return false;
-  const e = COHORTS[0] + parseInt(code[0], 36);
+  if (!/^[0-9a-z][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]*)?$/.test(code)) return false;
+  const [main, sp = ''] = code.split('.');
+  const e = COHORTS[0] + parseInt(main[0], 36);
   if (!DATA[e]) return false;
   let bin;
-  try { bin = atob(code.slice(1).replace(/-/g, '+').replace(/_/g, '/')); } catch { return false; }
+  try { bin = atob(main.slice(1).replace(/-/g, '+').replace(/_/g, '/')); } catch { return false; }
   loadCohort(e);
   bitOrder.forEach((s, i) => {
     if (!s) return;
     const b = bin.charCodeAt(i >> 3);
     if (b && (b >> (i & 7)) & 1) selected.add(s);
   });
+  for (let k = 0; k + 1 < sp.length; k += 2) {
+    const n = B64.indexOf(sp[k]) * 64 + B64.indexOf(sp[k + 1]);
+    const it = SPECIAL[Math.floor(n / 5)];
+    if (it) specialSel.set(it, n % 5 + 1);
+  }
   return true;
 }
 
@@ -236,6 +304,7 @@ const isTaken = s => s.req || selected.has(s);
 function totals() {
   const per = [1, 2, 3, 4, 5].map(g => ({ g, general: 0, major: 0 }));
   for (const s of subjects) if (isTaken(s)) per[s.g - 1][s.cat === 0 ? 'general' : 'major'] += s.cr;
+  for (const [it, g] of specialSel) per[g - 1][it.cat === 0 ? 'general' : 'major'] += it.cr;
   let cg = 0, cm = 0;
   for (const p of per) {
     p.total = p.general + p.major;
@@ -322,6 +391,46 @@ function renderGrades() {
   applySort();
 }
 
+function renderSpecial() {
+  const tbody = $('specialBody');
+  tbody.innerHTML = '';
+  for (const it of SPECIAL) {
+    const tr = document.createElement('tr');
+    tr.className = 'sel';
+    tr.innerHTML = `
+      <td><input type="checkbox" class="check" aria-label="${it.exam} ${it.level}"></td>
+      <td class="name">${it.exam}</td>
+      <td>${it.level}</td>
+      <td><span class="badge ${it.cat === 0 ? 'b-gen' : 'b-pro'}">${it.cat === 0 ? '一般' : '専門'}</span></td>
+      <td class="num">${it.cr}</td>
+      <td><select aria-label="認定学年">${[1, 2, 3, 4, 5].map(g => `<option value="${g}">${g}年</option>`).join('')}</select></td>`;
+    it.row = tr;
+    it.box = tr.querySelector('input');
+    it.sel = tr.querySelector('select');
+    tr.addEventListener('click', ev => {
+      if (ev.target === it.sel) return;
+      toggleSpecial(it, ev.target === it.box ? it.box.checked : !specialSel.has(it));
+    });
+    it.sel.onchange = () => toggleSpecial(it, true, +it.sel.value);
+    tbody.appendChild(tr);
+  }
+}
+
+// 同じ枠では上位1つだけを認定するので、枠内のほかの級は外す（認定学年は引き継ぐ）
+function toggleSpecial(it, on, grade) {
+  if (on) {
+    for (const o of SPECIAL) {
+      if (o === it || o.group !== it.group || !specialSel.has(o)) continue;
+      grade = grade || specialSel.get(o);
+      specialSel.delete(o);
+    }
+    specialSel.set(it, grade || +it.sel.value);
+  } else {
+    specialSel.delete(it);
+  }
+  update();
+}
+
 // ---- 並べ替え：列見出しをクリックするたびに昇順・降順を切り替え（全学年共通） ----
 const TERM_ORDER = ['前期', '後期', '通年', '集中'];
 const SORT_COLUMNS = [
@@ -396,6 +505,20 @@ function update() {
     s.row.classList.toggle('on', on);
     s.row.classList.toggle('conflict', !on && !allowDup && sameName(s).some(o => selected.has(o)));
   }
+  let spGeneral = 0, spMajor = 0;
+  for (const it of SPECIAL) {
+    const g = specialSel.get(it);
+    it.box.checked = !!g;
+    it.row.classList.toggle('on', !!g);
+    if (g) {
+      it.sel.value = g;
+      if (it.cat === 0) spGeneral += it.cr; else spMajor += it.cr;
+    }
+  }
+  const spText = spGeneral + spMajor
+    ? `特別学修 ${spGeneral + spMajor}単位（一般${spGeneral}・専門${spMajor}）を含む` : '';
+  $('specialSum').textContent = spText.replace('を含む', '');
+  $('specialNote').textContent = spText ? `※${spText}` : '';
   const per = totals();
   document.querySelectorAll('[data-sum]').forEach(el => {
     const p = per[+el.dataset.sum - 1];
@@ -486,7 +609,12 @@ async function copy(text, msg) {
 }
 
 $('cohort').innerHTML = COHORTS.map(e => `<option value="${e}">${e}年度入学</option>`).join('');
-$('cohort').onchange = () => { loadCohort(+$('cohort').value); render(); };
+$('cohort').onchange = () => {
+  const sp = specialSel;  // 特別学修は入学年度によらないので引き継ぐ
+  loadCohort(+$('cohort').value);
+  specialSel = sp;
+  render();
+};
 $('copyLink').onclick = () => copy(location.href.split('#')[0] + '#' + encode(), 'リンクをコピーしました');
 $('allowDup').onchange = () => {
   allowDup = $('allowDup').checked;
@@ -506,10 +634,20 @@ try { allowDup = localStorage.getItem(DUP_KEY) === '1'; } catch {}
 $('allowDup').checked = allowDup;
 try { $('hideReq').checked = localStorage.getItem(HIDE_REQ_KEY) === '1'; } catch {}
 document.body.classList.toggle('hide-req', $('hideReq').checked);
+$('showSpecial').onchange = () => {
+  document.body.classList.toggle('show-special', $('showSpecial').checked);
+  try { localStorage.setItem(SHOW_SPECIAL_KEY, $('showSpecial').checked ? '1' : '0'); } catch {}
+  fitBar();
+};
+try { $('showSpecial').checked = localStorage.getItem(SHOW_SPECIAL_KEY) === '1'; } catch {}
 let saved = null;
 try { saved = localStorage.getItem(STORAGE_KEY); } catch {}
 // 自動保存は選択科目があるときだけ復元する（何も選んでいなければ初期値の入学年度で始める）
-if (!decode(location.hash) && !(decode(saved) && selected.size)) loadCohort(DEFAULT_COHORT);
+if (!decode(location.hash) && !(decode(saved) && (selected.size || specialSel.size))) loadCohort(DEFAULT_COHORT);
+// 特別学修を選んだ状態で開いたときは表を見せる
+if (specialSel.size) $('showSpecial').checked = true;
+document.body.classList.toggle('show-special', $('showSpecial').checked);
+renderSpecial();
 render();
 </script>
 </body>
