@@ -27,7 +27,8 @@ body { margin: 0; background: var(--bg); color: var(--text);
   font-size: 14px; line-height: 1.5; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
-header { background: var(--panel); border-bottom: 1px solid var(--line); padding: 12px 16px; }
+header { position: sticky; top: 0; z-index: 20; background: var(--panel); border-bottom: 1px solid var(--line); padding: 12px 16px; }
+@media (max-width: 960px) { header { padding: 8px 16px; } header h1 .muted { display: none; } }
 header .inner { max-width: 1280px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
 h1 { font-size: 18px; margin: 0; margin-right: auto; }
 select, button, input[type=text] { font: inherit; color: var(--text); background: var(--panel);
@@ -37,8 +38,8 @@ button:hover { border-color: var(--accent); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 main { max-width: 1280px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
 @media (max-width: 960px) { main { grid-template-columns: minmax(0, 1fr); } aside { order: -1; } }
-aside { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 12px; }
-@media (max-width: 960px) { aside { position: static; } }
+aside { position: sticky; top: calc(var(--header-h, 0px) + 12px); max-height: calc(100vh - var(--header-h, 0px) - 24px); overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+@media (max-width: 960px) { aside { position: static; max-height: none; overflow: visible; } }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 .card h2 { font-size: 15px; margin: 0 0 8px; }
 .grade { margin-bottom: 16px; padding: 0; overflow: hidden; }
@@ -82,8 +83,6 @@ tr.conflict td.name::after { content: "（他学年で選択済）"; color: var(
 .pill.ng { background: var(--ng-soft); color: var(--ng); }
 .short { color: var(--ng); }
 .muted { color: var(--muted); font-size: 12px; }
-.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.row input[type=text] { flex: 1; min-width: 8em; font-family: ui-monospace, Consolas, monospace; }
 #toast { position: fixed; left: 50%; bottom: calc(24px + var(--bar-h, 0px)); transform: translateX(-50%); background: var(--text); color: var(--bg);
   padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 #toast.show { opacity: 1; }
@@ -108,7 +107,7 @@ footer { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
     <h1>履修シミュレータ <span class="muted">香川高専 機械工学科（2019年度以降入学者）</span></h1>
     <label>入学年度 <select id="cohort"></select></label>
     <label><input type="checkbox" id="hideReq"> 必修科目を隠す</label>
-    <button class="primary" id="copyLink">リンクをコピー</button>
+    <button class="primary" id="copyLink">現状のリンクをコピー</button>
   </div>
 </header>
 
@@ -129,13 +128,8 @@ footer { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
       <div class="muted" id="hoursNote"></div>
     </div>
     <div class="card">
-      <h2>セーブコード</h2>
-      <div class="row">
-        <input type="text" id="code" spellcheck="false" aria-label="セーブコード">
-        <button id="copyCode">コピー</button>
-        <button id="loadCode">読込</button>
-      </div>
-      <p class="muted">状態はこの端末のブラウザにも自動保存されます。</p>
+      <h2>オプション</h2>
+      <p class="muted" style="margin-top:0">状態はこの端末のブラウザに自動保存されます。「現状のリンクをコピー」で選択状態ごと共有できます。</p>
       <label class="muted"><input type="checkbox" id="allowDup"> 同名の選択科目を複数学年で履修できるようにする</label>
     </div>
   </aside>
@@ -451,14 +445,14 @@ function update() {
   $('hoursNote').innerHTML = ['単位時間/週。「a / b」は1Q・2Q（3Q・4Q）で異なる場合。', ...notes].join('<br>');
 
   const code = encode();
-  $('code').value = code;
   history.replaceState(null, '', '#' + code);
   try { localStorage.setItem(STORAGE_KEY, code); } catch {}
 }
 
-// 下部バーの高さぶん、ページ末尾とトーストを持ち上げる
+// 下部バーの高さぶん、ページ末尾とトーストを持ち上げる。ヘッダの高さぶん、右欄の固定位置を下げる
 function fitBar() {
   document.documentElement.style.setProperty('--bar-h', $('mobileBar').offsetHeight + 'px');
+  document.documentElement.style.setProperty('--header-h', document.querySelector('header').offsetHeight + 'px');
 }
 window.addEventListener('resize', fitBar);
 
@@ -494,10 +488,6 @@ async function copy(text, msg) {
 $('cohort').innerHTML = COHORTS.map(e => `<option value="${e}">${e}年度入学</option>`).join('');
 $('cohort').onchange = () => { loadCohort(+$('cohort').value); render(); };
 $('copyLink').onclick = () => copy(location.href.split('#')[0] + '#' + encode(), 'リンクをコピーしました');
-$('copyCode').onclick = () => copy(encode(), 'セーブコードをコピーしました');
-$('loadCode').onclick = () => {
-  if (decode($('code').value)) { render(); toast('読み込みました'); } else toast('セーブコードが正しくありません');
-};
 $('allowDup').onchange = () => {
   allowDup = $('allowDup').checked;
   try { localStorage.setItem(DUP_KEY, allowDup ? '1' : '0'); } catch {}
