@@ -377,12 +377,12 @@ function update() {
     const min = R.promote[g];
     html += status(`${g}年 → ${g + 1}年 進級`, per[g - 1].cumTotal >= min, `累計 ${need(per[g - 1].cumTotal, min)}`);
   }
-  html += status('卒業（5年終了時）',
-    p5.cumGeneral >= R.graduate.general && p5.cumMajor >= R.graduate.major && p5.cumTotal >= R.graduate.total,
-    `一般 ${need(p5.cumGeneral, R.graduate.general)}・専門 ${need(p5.cumMajor, R.graduate.major)}・計 ${need(p5.cumTotal, R.graduate.total)}`);
   html += status('卒業見込みライン（4年終了時）',
     p4.cumGeneral >= R.recommend.general && p4.cumMajor >= R.recommend.major && p4.cumTotal >= R.recommend.total,
     `一般 ${need(p4.cumGeneral, R.recommend.general)}・専門 ${need(p4.cumMajor, R.recommend.major)}・計 ${need(p4.cumTotal, R.recommend.total)}`);
+  html += status('卒業（5年終了時）',
+    p5.cumGeneral >= R.graduate.general && p5.cumMajor >= R.graduate.major && p5.cumTotal >= R.graduate.total,
+    `一般 ${need(p5.cumGeneral, R.graduate.general)}・専門 ${need(p5.cumMajor, R.graduate.major)}・計 ${need(p5.cumTotal, R.graduate.total)}`);
   html += status('安全を持った卒業ライン（5年終了時）', p5.cumTotal >= R.request.total, `累計 ${need(p5.cumTotal, R.request.total)}`);
   $('checks').innerHTML = html;
 
