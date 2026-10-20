@@ -91,6 +91,8 @@ def parse(html):
             'cat': r[0]['text'], 'req': r[1]['text'], 'name': name,
             'kind': r[4]['text'], 'cr': int(r[5]['text'] or 0), 'q': q,
             'code': re.search(r'subject_code=(\w+)', r[2]['href']).group(1),
+            # シラバスURLの year は開講年度ではなく、その科目を履修する学年の入学年度
+            'syl_year': int(re.search(r'year=(\d+)', r[2]['href']).group(1)),
         })
     return subjects
 
@@ -122,9 +124,9 @@ def main():
                     term = '通年'
                 else:
                     term = '前期' if first else '後期'
-                # [学年, 開講年度, 区分(0一般/1専門), 必修(1)/選択(0), 科目名, 単位種別(0履修/1学修), 単位数, 週時数[1Q..4Q], 開講期, 科目コード]
+                # [学年, 開講年度, 区分(0一般/1専門), 必修(1)/選択(0), 科目名, 単位種別(0履修/1学修), 単位数, 週時数[1Q..4Q], 開講期, 科目コード, シラバスURLのyear]
                 rows.append([g, y, 0 if s['cat'] == '一般' else 1, 1 if s['req'] == '必修' else 0, s['name'],
-                             1 if s['kind'] == '学修単位' else 0, s['cr'], hours, term, s['code']])
+                             1 if s['kind'] == '学修単位' else 0, s['cr'], hours, term, s['code'], s['syl_year']])
         out[str(e)] = rows
     OUT.write_text('const DATA=' + json.dumps(out, ensure_ascii=False, separators=(',', ':')) + ';\n', encoding='utf-8')
     print(f'wrote {OUT}')

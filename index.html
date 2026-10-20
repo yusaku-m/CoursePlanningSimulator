@@ -190,8 +190,8 @@ let allowDup = false;
 
 function loadCohort(e) {
   cohort = e;
-  const all = DATA[e].map(([g, year, cat, req, name, study, cr, h, term, code]) =>
-    ({ g, year, cat, req: req === 1, name, study: study === 1, cr, h, term, code }));
+  const all = DATA[e].map(([g, year, cat, req, name, study, cr, h, term, code, sylYear]) =>
+    ({ g, year, cat, req: req === 1, name, study: study === 1, cr, h, term, code, sylYear }));
   // 割当学年にも同じ科目があるときだけ、割当外の学年の行を隠す
   const hidden = s => {
     const a = assignedGrade(s.name);
@@ -290,7 +290,7 @@ function renderGrades() {
     for (const s of list) {
       const tr = document.createElement('tr');
       tr.className = s.req ? 'req' : 'sel';
-      const url = `https://syllabus.kosen-k.go.jp/Pages/PublicSyllabus?school_id=39&department_id=31&subject_code=${s.code}&year=${s.year}&lang=ja`;
+      const url = `https://syllabus.kosen-k.go.jp/Pages/PublicSyllabus?school_id=39&department_id=31&subject_code=${s.code}&year=${s.sylYear}&lang=ja`;
       tr.innerHTML = `
         <td><input type="checkbox" class="check" ${s.req ? 'checked disabled' : ''} aria-label="${s.name}"></td>
         <td class="name"><a href="${url}" target="_blank" rel="noopener">${s.name}</a></td>
