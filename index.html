@@ -109,7 +109,7 @@ footer { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
       <div id="checks"></div>
     </div>
     <div class="card">
-      <h2>週あたり授業時数（4・5年）</h2>
+      <h2>週あたり授業時数</h2>
       <table class="summary" id="hours"></table>
       <div class="muted" id="hoursNote"></div>
     </div>
@@ -342,7 +342,7 @@ function update() {
   $('checks').innerHTML = html;
 
   let rows = '', notes = [];
-  for (const g of [4, 5]) {
+  for (const g of [1, 2, 3, 4, 5]) {
     const { q, intensive } = weeklyHours(g);
     const half = (a, b) => a === b ? fmt(a) : `${fmt(a)} / ${fmt(b)}`;
     rows += `<tr><td>${g}年</td><td class="num">${half(q[0], q[1])}</td><td class="num">${half(q[2], q[3])}</td></tr>`;
